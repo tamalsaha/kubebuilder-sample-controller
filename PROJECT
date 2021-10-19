@@ -1,0 +1,26 @@
+domain: learnkube.com
+layout:
+- go.kubebuilder.io/v3
+multigroup: true
+projectName: kubebuilder-sample-controller
+repo: github.com/tamalsaha/kubebuilder-sample-controller
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: learnkube.com
+  group: crd
+  kind: Foo
+  path: github.com/tamalsaha/kubebuilder-sample-controller/apis/crd/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: learnkube.com
+  group: apps
+  kind: Foo
+  path: github.com/tamalsaha/kubebuilder-sample-controller/apis/apps/v1alpha1
+  version: v1alpha1
+version: "3"

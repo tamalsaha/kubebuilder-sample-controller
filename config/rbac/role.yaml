@@ -1,0 +1,60 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - apps.learnkube.com
+  resources:
+  - foos
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps.learnkube.com
+  resources:
+  - foos/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - apps.learnkube.com
+  resources:
+  - foos/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - crd.learnkube.com
+  resources:
+  - foos
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.learnkube.com
+  resources:
+  - foos/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - crd.learnkube.com
+  resources:
+  - foos/status
+  verbs:
+  - get
+  - patch
+  - update
