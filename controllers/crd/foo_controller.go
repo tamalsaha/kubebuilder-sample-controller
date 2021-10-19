@@ -18,13 +18,18 @@ package crd
 
 import (
 	"context"
-
+	crdv1alpha1 "github.com/tamalsaha/kubebuilder-sample-controller/apis/crd/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	crdv1alpha1 "github.com/tamalsaha/kubebuilder-sample-controller/apis/crd/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // FooReconciler reconciles a Foo object
@@ -47,16 +52,72 @@ type FooReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *FooReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := log.FromContext(ctx)
 
 	// your logic here
+	var foo crdv1alpha1.Foo
+	if err := r.Get(ctx, req.NamespacedName, &foo); err != nil {
+		log.Error(err, "unable to fetch Foo")
+		// we'll ignore not-found errors, since they can't be fixed by an immediate
+		// requeue (we'll need to wait for a new notification), and we can get them
+		// on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
 
+	// create or update deployment
+	var deploy appsv1.Deployment
+
+	depName := types.NamespacedName{
+		Namespace: req.Namespace,
+		Name:      foo.Spec.DeploymentName,
+	}
+	if err := r.Get(ctx, depName, &deploy); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+
+		deploy = appsv1.Deployment{}
+		// set owner
+		if err := r.Create(ctx, &deploy); err != nil {
+			log.Error(err, "unable to create deployment", "key", depName)
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+	} else {
+		// check matches owner
+		if deploy.Spec.Replicas != foo.Spec.Replicas {
+			deploy.Spec.Replicas = foo.Spec.Replicas
+			if err := r.Update(ctx, &deploy); err != nil {
+				log.Error(err, "unable to update deployment", "key", depName)
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+		}
+
+		foo.Status.AvailableReplicas = deploy.Status.AvailableReplicas
+		_ = r.Status().Update(ctx, &foo)
+	}
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *FooReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	configMapHandler := handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
+		foos := &crdv1alpha1.FooList{}
+		if err := r.List(context.Background(), foos, client.InNamespace(a.GetNamespace())); err != nil {
+			return nil
+		}
+		var req []reconcile.Request
+		for _, c := range foos.Items {
+			if c.Spec.SecretName == a.GetName() {
+				req = append(req, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&c)})
+			}
+		}
+		return req
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&crdv1alpha1.Foo{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
+		Watches(&source.Kind{Type: &corev1.Secret{}}, configMapHandler).
 		Complete(r)
 }
